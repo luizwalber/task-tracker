@@ -1,0 +1,45 @@
+---
+description: Core governance rules for task-tracker — context updates, scope discipline
+alwaysApply: true
+---
+
+# Core Governance
+
+## Before implementing
+
+1. Read `.scratch/personal-performance-tracker/spec.md` (the PRD — problem, solution, user stories, implementation/testing decisions) and `.scratch/personal-performance-tracker/architecture-spec.md` (the full architecture: domain model, data model, REST contract, infra, security) for the area you're about to touch.
+2. Check the [wayfinder map](../.scratch/personal-performance-tracker/map.md) and its closed decision tickets (`.scratch/personal-performance-tracker/issues/01-13`) for the reasoning behind a decision, if the architecture-spec's summary isn't enough — each closed ticket records the trade-off and the alternative that was rejected.
+3. Follow `.claude/clean-architecture.mdc` for layer boundaries on both the NestJS backend and the Flutter frontend.
+
+## After completing work
+
+Update when relevant:
+- `.scratch/personal-performance-tracker/architecture-spec.md` or `spec.md` — if the work reveals a decision that should change. Don't edit a closed decision ticket in place; open a new one that supersedes it and say so, mirroring how the wayfinder map itself handles revisited decisions.
+- The originating ticket file under `.scratch/personal-performance-tracker/issues/` — check off its acceptance criteria and update its `Status:` line once its work lands.
+
+## Scope discipline
+
+- Minimal diff: change only what the task requires.
+- Do not break Clean Architecture layer boundaries (`.claude/clean-architecture.mdc`) without recording why — a new ticket, or a note in the relevant decision ticket.
+- Do not invent architecture decisions; `architecture-spec.md` and the closed wayfinder tickets are the source of truth. If a needed decision isn't recorded, raise it (a new ticket, or a `/grilling` session) rather than assuming.
+- If confidence is low or context is missing, ask before proceeding.
+
+## Commit approval
+
+Never `git commit` without first showing the user what's about to be committed (the diff or a summary of it) and getting explicit go-ahead. This applies even at the end of an otherwise-complete task — finishing the work is not itself permission to commit it.
+
+Never run `git add`/stage changes either. The user stages incrementally themselves while reviewing. Leave the working tree unstaged when a task's implementation work is done; describe what changed (a summary or `git diff` against the working tree) instead of staging it to show them.
+
+## Branching
+
+Every implementation ticket (`.scratch/personal-performance-tracker/issues/14` onward) gets its own branch before any work lands — never commit ticket work directly to `master`. Branch off `master`, named per `.claude/commits-and-naming.mdc` (`feature/<ticket-number>-<short-desc>`, e.g. `feature/15-main-screen-end-to-end`). Create the branch as the first step of `/implement`, before writing any code.
+
+The 13 wayfinder decision tickets (`issues/01`–`13`) and the map itself are documentation, not code — they don't need a branch of their own.
+
+## Language
+
+- Code, commits, identifiers, and technical docs: **English**. Conversation with the user stays in whatever language they use.
+
+## Issue tracker
+
+Issues and specs live as local Markdown files in `.scratch/personal-performance-tracker/` — no GitHub issues, no `gh` CLI for tracker operations. One ticket per file under `issues/`, a `Status:` line near the top, the wayfinder map (`map.md`) as the index. See `.scratch/personal-performance-tracker/map.md`'s own `## Notes` section for the full convention this effort follows.

@@ -1,0 +1,19 @@
+Type: grilling
+Status: resolved
+
+## Question
+
+Does body weight become its own aggregate (`WeightEntry`, with its own table and a query independent of the calendar) or a field on the weight task's occurrence (`TaskOccurrence.weightKg`)? Consider that the weight time series is queried independently of the calendar (evolution chart, month-close/month-open weight), but the record originates from a task occurrence (a completion slider doesn't apply — it's weight + photo). Also decide the empty state of the "weight at month end" component when the month has no reading at all.
+
+Ambiguity to resolve here, not silently pick a side: the brief says every occurrence records "completion percentage OR rest-day" and, separately, "body weight, only when the task is of the weight-tracking type" — but it never says what the percentage *means* for a weight task (is it always 100% when a weigh-in happens, and rest-day/0% when it doesn't? is it editable independently of the recorded weight?). Define this explicitly, since it affects whether/how the weigh-in enters the day's performance denominator.
+
+Resolve with the data design (own aggregate or field), the defined empty state, and the meaning of the percentage for weight-type occurrences.
+
+## Answer
+
+**Data design: a field on `TaskOccurrence` (`weightKg`, nullable, populated only when the occurrence's task is of the weight-tracking type), not a separate `WeightEntry` aggregate.** A dedicated aggregate would require a second write path kept in sync with the occurrence upsert — the weight is entered through the exact same "select day, fill in the task" flow as everything else, there's no independent creation path for it. A separate table buys flexibility (multiple readings per day, readings not tied to a task) that isn't in the requirements — weight tracking here is explicitly weekly and task-driven. The independent time-series query the brief asks for is just a filter over the existing table and its existing `(user_id, task_id, date)` index: `SELECT date, weightKg FROM task_occurrences WHERE user_id = $1 AND task_id = $weightTaskId AND weight_kg IS NOT NULL ORDER BY date`.
+
+**Percentage semantics for weight-type occurrences**: the percentage is never manually chosen for a weight task — there's no slider in the UI for it, only a weight input + optional photo. Recording a weight auto-derives `percentage = 100`. Not recording a weight is either `unfilled` (excluded from the denominator, the default when the day passes with no entry) or an explicit `REST` if the user marks that scheduled weigh-in as a legitimate dismissal — same three-state shape (`percentage | REST | unfilled`) as every other task type, so the performance-calculation service needs zero special-casing for the weight task. This is what "a slider doesn't apply" cashes out to concretely: the input UI differs, the underlying occurrence shape doesn't.
+
+**Empty state, with a scope clarification**: the brief says "peso de abertura do mês = última leitura registrada no mês anterior" literally — but taken literally, one gapped month (skipped weigh-ins for two months running) would blank out the opening-weight display even though an older reading exists and is clearly the right "current known weight." Reinterpreting this as "the most recent reading found by searching backward from the start of this month" (not strictly limited to the immediately preceding calendar month) keeps the component useful across gaps. The **true empty state** — no reading exists anywhere before this month, e.g. a brand-new user — displays an explicit empty marker (`—` / "no reading yet"), never a fabricated `0` or a silently omitted component. Same logic applies symmetrically to the month-close side: it's the most recent reading found by searching backward from the end of this month, defaulting to the true-empty marker only if no reading exists at all yet.
+

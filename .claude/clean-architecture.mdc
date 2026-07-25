@@ -1,0 +1,86 @@
+---
+description: Clean Architecture layer boundaries for the task-tracker backend and frontend
+globs: backend/src/**/*.ts,frontend/lib/**/*.dart
+alwaysApply: false
+---
+
+# Clean Architecture
+
+## Layer dependency rule (both sides)
+
+Dependencies point **inward only**:
+
+```
+presentation → application → domain ← infrastructure   (backend)
+presentation → domain ← data                            (frontend)
+```
+
+`domain` depends on nothing else in this list, on either side. Everything else depends inward toward it, never sideways or outward.
+
+## Backend (NestJS) — layer responsibilities
+
+Structure is **layer-first, then feature**: `backend/src/{domain,application,infrastructure,presentation}/<feature>/`.
+
+| Layer | Contains | Must NOT contain |
+|---|---|---|
+| **domain** | Value objects (`RecurrenceRule`, `RestPolicy`, `LocalDate`), entities (`Task`, `TaskOccurrence`), domain services (`PerformanceCalculationService`, `RestQuotaPolicy`, `TaskRecurrenceHistory`) | TypeORM, `@nestjs/*` decorators, HTTP, `firebase-admin` |
+| **application** | Use cases (one class per user-facing operation, e.g. `EnsureUserProjectionUseCase`, `UpsertOccurrenceUseCase`), ports (`ClockPort`), orchestration | TypeORM entities/repositories, `@Controller`, HTTP DTOs |
+| **infrastructure** | TypeORM entities and repositories, `UserScopedRepository` and its concrete subclasses, `FirebaseAuthGuard`/`FirebaseAdminModule`, adapters (`SaoPauloClockAdapter`, photo/video processing) | Business rules, HTTP concerns |
+| **presentation** | `@Controller`s, param decorators (`@CurrentUser`), request/response DTOs | Business rules, persistence concerns |
+
+See `.scratch/personal-performance-tracker/architecture-spec.md` §2 (domain model) and §2.6 (the domain-vs-use-case table) for the authoritative version of this split, and §8 for the security layering (`FirebaseAuthGuard` → `UserScopedRepository`) already implemented in `backend/src/infrastructure/auth/` and `backend/src/infrastructure/persistence/`.
+
+## Frontend (Flutter) — layer responsibilities
+
+Structure is **feature-first, then layer** (the opposite order from the backend, matching idiomatic `flutter_modular`): `frontend/lib/modules/<feature>/{domain,data,presentation}/`.
+
+| Layer | Contains | Must NOT contain |
+|---|---|---|
+| **domain** | Entities (`AuthenticatedUser`), repository interfaces (`abstract class AuthRepository`) | `package:firebase_auth`, `package:http`, any concrete SDK |
+| **data** | Datasources that are the *only* files allowed to import the real SDK (`FirebaseAuthDatasource`), repository implementations (`FirebaseAuthRepositoryImpl`) | Business rules, widget code |
+| **presentation** | Blocs (`AuthBloc`), events/states, pages/widgets | Direct SDK calls — always go through the domain repository interface |
+
+`frontend/lib/core/` holds cross-cutting infrastructure with no feature of its own (`ApiClient`) — the frontend analogue of the backend's "cross-cutting technical concern" carve-out.
+
+## Examples
+
+```typescript
+// ❌ BAD — TypeORM entity leaking into a use case, HTTP concerns in application
+async upsertOccurrence(dto: UpsertOccurrenceDto): Promise<TaskOccurrenceEntity> {
+  return this.repo.save({ ...dto }); // TypeORM entity, raw DTO
+}
+
+// ✅ GOOD — use case depends on the domain service, returns a domain view
+async execute(input: UpsertOccurrenceInput): Promise<{ occurrence: TaskOccurrence; dayPerformance: number | null }> {
+  const occurrence = await this.occurrenceRepository.upsert(input);
+  const dayPerformance = this.performanceCalculationService.calculateDay(input.date, /* ... */);
+  return { occurrence, dayPerformance };
+}
+```
+
+```dart
+// ❌ BAD — Bloc reaching past the domain repository into the SDK directly
+Future<void> _onLoginRequested(AuthLoginRequested event, Emitter<AuthState> emit) async {
+  final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(...); // SDK in presentation
+}
+
+// ✅ GOOD — Bloc depends only on the domain interface (see auth_bloc.dart)
+Future<void> _onLoginRequested(AuthLoginRequested event, Emitter<AuthState> emit) async {
+  final user = await _authRepository.signInWithEmailAndPassword(email: event.email, password: event.password);
+  emit(AuthAuthenticated(user));
+}
+```
+
+## Features (this project, by implementation ticket)
+
+- `auth` — Firebase login, `FirebaseAuthGuard`, `UserScopedRepository`, `ApiClient` (ticket 14, done)
+- `task`/`calendar` — task CRUD, monthly calendar, slider autosave, `PerformanceCalculationService` (ticket 15)
+- `recurrence` — full `RecurrencePattern` set, `TaskRecurrenceHistory` versioning (ticket 16)
+- `rest-quota` — `RestPolicy`, `RestQuotaPolicy`, Sunday-week grouping (ticket 17)
+- `pause` — the `PAUSED` recurrence pattern (ticket 18)
+- `weight` — the canonical weight task, derived month-end occurrence, weight time series (ticket 19)
+- `reports` — annual view, monthly/annual aggregates, rest-day counts (ticket 20)
+- `photo` — upload pipeline (sharp), authenticated serving (ticket 21)
+- `timelapse` — daily FFmpeg job, status endpoint (ticket 22)
+
+A cross-cutting technical concern with no domain rules of its own (the photo/video processing adapters, the clock adapter) is infrastructure, not domain — it doesn't earn its own feature's full four-layer split.
