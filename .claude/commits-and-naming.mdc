@@ -1,0 +1,53 @@
+---
+description: Conventional Commits, branch naming, and semantic identifiers (English)
+alwaysApply: true
+---
+
+# Commits and Naming
+
+## Conventional Commits
+
+Format: `type(scope): subject`
+
+Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`, `ci`
+
+```
+feat(auth): add FirebaseAuthGuard and UserScopedRepository isolation contract
+fix(occurrence): return 404 instead of 500 for another user's occurrence
+test(recurrence): cover MONTHLY_DAY 'LAST' across leap and non-leap February
+```
+
+## Branch naming
+
+- `feature/<ticket-number>-<short-desc>` — new functionality (e.g. `feature/15-main-screen-end-to-end`)
+- `fix/<ticket-or-short-desc>` — bug fixes
+- `refactor/<scope>` — structural changes
+- `chore/<scope>` — tooling, deps, CI
+
+## Semantic naming (mandatory)
+
+Name by **domain and layer**, never generic — and follow each ecosystem's own casing convention rather than forcing one style across both:
+
+```
+# ❌ BAD
+utils/helpers.ts
+common/service.ts
+DataProcessor.ts / data_processor.dart
+
+# ✅ GOOD — backend (NestJS, kebab-case + layer suffix)
+infrastructure/persistence/user-scoped.repository.ts
+infrastructure/auth/firebase-auth.guard.ts
+application/users/ensure-user-projection.use-case.ts
+
+# ✅ GOOD — frontend (Flutter/Dart, snake_case)
+modules/auth/presentation/bloc/auth_bloc.dart
+modules/auth/data/datasources/firebase_auth_datasource.dart
+```
+
+## Test coverage
+
+No fixed line-coverage percentage is mandated — this project's testing shape is a decision already recorded in `.scratch/personal-performance-tracker/spec.md`'s **Testing Decisions** section, not an arbitrary number:
+
+- Domain services and value objects (`PerformanceCalculationService`, `RestQuotaPolicy`, `RecurrenceRule`, `TaskRecurrenceHistory`) get pure unit tests, no I/O — this is where most coverage lives.
+- Backend integration is **one HTTP seam**, not one test per repository: real requests via `supertest` against a real Postgres (via `testcontainers`), covering cross-user isolation and upsert idempotency. Don't add a bespoke integration test per endpoint/repository beyond that seam.
+- Frontend's seam is the **Bloc** (`bloc_test`, events in → states out), not widget tests — except one minimal golden-path widget test per screen for the primary interaction (see `frontend/test/modules/auth/presentation/pages/login_page_test.dart`).
