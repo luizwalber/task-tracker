@@ -71,4 +71,30 @@ void main() {
       expect(captured.containsKey('Authorization'), isFalse);
     },
   );
+
+  test('put() sends a JSON-encoded body with a Bearer header', () async {
+    when(
+      () => authRepository.getIdToken(),
+    ).thenAnswer((_) async => 'the-token');
+    when(
+      () => httpClient.put(
+        any(),
+        headers: any(named: 'headers'),
+        body: any(named: 'body'),
+      ),
+    ).thenAnswer((_) async => http.Response('{}', 200));
+
+    await apiClient.put('/occurrences/t1/2026-03-10', {'percentage': 70});
+
+    final captured = verify(
+      () => httpClient.put(
+        Uri.parse('https://api.example.com/occurrences/t1/2026-03-10'),
+        headers: captureAny(named: 'headers'),
+        body: '{"percentage":70}',
+      ),
+    ).captured.single as Map<String, String>;
+
+    expect(captured['Authorization'], 'Bearer the-token');
+    expect(captured['Content-Type'], 'application/json');
+  });
 }
