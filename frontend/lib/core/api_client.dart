@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 
 import '../modules/auth/domain/repositories/auth_repository.dart';
@@ -20,10 +22,38 @@ class ApiClient {
   final String baseUrl;
 
   Future<http.Response> get(String path) async {
-    final token = await _authRepository.getIdToken();
-    return _client.get(
+    return _client.get(Uri.parse('$baseUrl$path'), headers: await _headers());
+  }
+
+  Future<http.Response> post(String path, Object body) async {
+    return _client.post(
       Uri.parse('$baseUrl$path'),
-      headers: {if (token != null) 'Authorization': 'Bearer $token'},
+      headers: await _headers(),
+      body: jsonEncode(body),
     );
+  }
+
+  Future<http.Response> put(String path, Object body) async {
+    return _client.put(
+      Uri.parse('$baseUrl$path'),
+      headers: await _headers(),
+      body: jsonEncode(body),
+    );
+  }
+
+  Future<http.Response> patch(String path, Object body) async {
+    return _client.patch(
+      Uri.parse('$baseUrl$path'),
+      headers: await _headers(),
+      body: jsonEncode(body),
+    );
+  }
+
+  Future<Map<String, String>> _headers() async {
+    final token = await _authRepository.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
   }
 }
